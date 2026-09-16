@@ -33,7 +33,7 @@ brew upgrade lorag
 ```bash
 lorag setup                               # start Ollama and pull default models
 lorag sync                                # export Notes and rebuild the index
-lorag q "What is the ACATS fee?"          # quote the question
+lorag q "What is the Admission fee?"       # quote the question
 lorag model                               # show the current chat model
 lorag model use qwen3.5:4b                # pull a model and use it for answers
 ```
