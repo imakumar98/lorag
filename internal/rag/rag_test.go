@@ -151,7 +151,7 @@ func TestAnswerQuestionMapsConnectionRefusedToOllamaError(t *testing.T) {
 			return nil, errors.New("connection refused")
 		},
 	})
-	if err == nil || err.Error() != "Ollama is not running. Start Ollama and try again." {
+	if err == nil || err.Error() != "Run lorag setup." {
 		t.Fatalf("error = %v", err)
 	}
 }

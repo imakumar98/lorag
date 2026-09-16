@@ -14,12 +14,15 @@ macOS only.
 
 ```bash
 brew install imakumar98/lorag/lorag
+lorag setup
 lorag sync
 ```
 
-Install starts Ollama and downloads the default models (`llama3.2:3b` and `nomic-embed-text`). That can take a few minutes.
+`lorag setup` starts Ollama, keeps it running at login, and downloads the default models (`llama3.2:3b` and `nomic-embed-text`). That can take a few minutes.
 
 `lorag sync` creates `~/lorag/docs`, exports Apple Notes, and builds the index. macOS may ask for Notes permission; allow it, then run `lorag sync` again.
+
+If `sync` or `q` says `Run lorag setup.`, run setup again.
 
 ```bash
 brew upgrade lorag
@@ -28,6 +31,7 @@ brew upgrade lorag
 ## Usage
 
 ```bash
+lorag setup                               # start Ollama and pull default models
 lorag sync                                # export Notes and rebuild the index
 lorag q "What is the ACATS fee?"          # quote the question
 lorag model                               # show the current chat model
@@ -61,6 +65,7 @@ Your own files under `~/lorag/docs` are kept. The `apple-notes/` folder is repla
 
 ```bash
 go build -o lorag ./cmd/lorag
+./lorag setup
 ./lorag sync
 ```
 

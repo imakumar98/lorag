@@ -129,7 +129,7 @@ func AnswerQuestion(query, docsDir, dbDir, embedModel, chatModel string, deps As
 func mapAskError(err error) error {
 	text := strings.ToLower(err.Error())
 	if strings.Contains(text, "connect") || strings.Contains(text, "refused") {
-		return &QuestionError{Msg: "Ollama is not running. Start Ollama and try again."}
+		return &QuestionError{Msg: "Run lorag setup."}
 	}
 	if strings.Contains(text, "model") && strings.Contains(text, "not found") {
 		return &QuestionError{Msg: "Chat model is missing. Run `lorag model use <name>`."}

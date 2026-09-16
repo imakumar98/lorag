@@ -11,16 +11,17 @@ import (
 	"strings"
 
 	"github.com/imakumar98/lorag/internal/notes"
+	"github.com/imakumar98/lorag/internal/ollama"
 	"github.com/imakumar98/lorag/internal/paths"
 	"github.com/imakumar98/lorag/internal/rag"
 )
 
-const usageText = `usage: lorag [-h] {sync,q,model} ...
+const usageText = `usage: lorag [-h] {setup,sync,q,model} ...
 
 Ask questions over local documents and Apple Notes.
 
 positional arguments:
-  {sync,q,model}
+  {setup,sync,q,model}
 
 options:
   -h, --help  show this help message and exit
@@ -35,12 +36,14 @@ func (e *ModelPullError) Error() string {
 }
 
 type Options struct {
-	Home      string
-	Stdout    io.Writer
-	Stderr    io.Writer
-	SyncNotes func(notesDir, dbDir string) (int, int, error)
-	PullModel func(name string) error
-	Ask       func(query, docsDir, dbDir, embedModel, chatModel string) (string, []string, error)
+	Home         string
+	Stdout       io.Writer
+	Stderr       io.Writer
+	SyncNotes    func(notesDir, dbDir string) (int, int, error)
+	PullModel    func(name string) error
+	Ask          func(query, docsDir, dbDir, embedModel, chatModel string) (string, []string, error)
+	Setup        func(stdout io.Writer) error
+	RequireReady func() error
 }
 
 func Main(args []string, opts Options) int {
@@ -74,6 +77,12 @@ func Main(args []string, opts Options) int {
 	p := paths.FromHome(home)
 
 	switch args[0] {
+	case "setup":
+		if len(args) != 1 {
+			fmt.Fprint(stderr, usageText)
+			return 2
+		}
+		return cmdSetup(p, stdout, stderr, opts)
 	case "sync":
 		if len(args) != 1 {
 			fmt.Fprint(stderr, usageText)
@@ -94,6 +103,30 @@ func Main(args []string, opts Options) int {
 	}
 }
 
+func cmdSetup(p paths.Paths, stdout, stderr io.Writer, opts Options) int {
+	if err := paths.EnsureLayout(p); err != nil {
+		fmt.Fprintf(stderr, "Error: %v\n", err)
+		return 1
+	}
+	if err := paths.WriteDefaultConfig(p); err != nil {
+		fmt.Fprintf(stderr, "Error: %v\n", err)
+		return 1
+	}
+	setup := opts.Setup
+	if setup == nil {
+		setup = defaultSetup
+	}
+	if err := setup(stdout); err != nil {
+		fmt.Fprintf(stderr, "Error: %s\n", err.Error())
+		return 1
+	}
+	return 0
+}
+
+func defaultSetup(w io.Writer) error {
+	return ollama.Setup(w, ollama.Deps{})
+}
+
 func cmdSync(p paths.Paths, stdout, stderr io.Writer, opts Options) int {
 	if err := paths.EnsureLayout(p); err != nil {
 		fmt.Fprintf(stderr, "Error: %v\n", err)
@@ -101,6 +134,15 @@ func cmdSync(p paths.Paths, stdout, stderr io.Writer, opts Options) int {
 	}
 	if err := paths.WriteDefaultConfig(p); err != nil {
 		fmt.Fprintf(stderr, "Error: %v\n", err)
+		return 1
+	}
+	config, err := paths.LoadConfig(p)
+	if err != nil {
+		fmt.Fprintf(stderr, "Error: %v\n", err)
+		return 1
+	}
+	if err := requireReady(opts, config.EmbedModel); err != nil {
+		fmt.Fprintf(stderr, "Error: %s\n", err.Error())
 		return 1
 	}
 	syncFn := opts.SyncNotes
@@ -134,6 +176,10 @@ func cmdQuestion(p paths.Paths, query string, stdout, stderr io.Writer, opts Opt
 	config, err := paths.LoadConfig(p)
 	if err != nil {
 		fmt.Fprintf(stderr, "Error: %v\n", err)
+		return 1
+	}
+	if err := requireReady(opts, config.EmbedModel, config.ChatModel); err != nil {
+		fmt.Fprintf(stderr, "Error: %s\n", err.Error())
 		return 1
 	}
 	ask := opts.Ask
@@ -176,6 +222,10 @@ func cmdModel(p paths.Paths, args []string, stdout, stderr io.Writer, opts Optio
 }
 
 func cmdModelUse(p paths.Paths, name string, stdout, stderr io.Writer, opts Options) int {
+	if err := requireReady(opts); err != nil {
+		fmt.Fprintf(stderr, "Error: %s\n", err.Error())
+		return 1
+	}
 	pull := opts.PullModel
 	if pull == nil {
 		pull = PullOllamaModel
@@ -190,6 +240,13 @@ func cmdModelUse(p paths.Paths, name string, stdout, stderr io.Writer, opts Opti
 	}
 	fmt.Fprintln(stdout, name)
 	return 0
+}
+
+func requireReady(opts Options, models ...string) error {
+	if opts.RequireReady != nil {
+		return opts.RequireReady()
+	}
+	return ollama.Ready(ollama.Deps{}, models...)
 }
 
 func PullOllamaModel(name string) error {
